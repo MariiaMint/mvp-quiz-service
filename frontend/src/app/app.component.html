@@ -1,0 +1,227 @@
+<div class="page">
+  <header class="topbar">
+    <h1>QuizFlow MVP</h1>
+    <div class="profile" *ngIf="token">
+      <span>{{ profileName }} ({{ profileRole }})</span>
+      <button (click)="logout()">Выйти</button>
+    </div>
+  </header>
+
+  <div class="alerts">
+    <p class="ok" *ngIf="uiMessage">{{ uiMessage }}</p>
+    <p class="err" *ngIf="uiError">{{ uiError }}</p>
+  </div>
+
+  <section class="auth" *ngIf="!token">
+    <h2>{{ authMode === 'login' ? 'Вход' : 'Регистрация' }}</h2>
+    <div class="grid two-cols">
+      <label>
+        Email
+        <input [(ngModel)]="email" type="email" />
+      </label>
+      <label>
+        Пароль
+        <input [(ngModel)]="password" type="password" />
+      </label>
+      <label *ngIf="authMode === 'register'">
+        Имя
+        <input [(ngModel)]="displayName" />
+      </label>
+      <label *ngIf="authMode === 'register'">
+        Роль
+        <select [(ngModel)]="role">
+          <option *ngFor="let r of roles" [ngValue]="r">{{ r }}</option>
+        </select>
+      </label>
+    </div>
+    <div class="actions">
+      <button (click)="submitAuth()">{{ authMode === 'login' ? 'Войти' : 'Зарегистрироваться' }}</button>
+      <button class="ghost" (click)="authMode = authMode === 'login' ? 'register' : 'login'">
+        {{ authMode === 'login' ? 'Создать аккаунт' : 'У меня уже есть аккаунт' }}
+      </button>
+    </div>
+  </section>
+
+  <main *ngIf="token" class="workspace">
+    <aside class="control-panel panel">
+      <h2>Панель управления</h2>
+
+      <section class="organizer-shell" *ngIf="profileRole === 'ORGANIZER'">
+        <div class="organizer-overview">
+          <article class="mini-card">
+            <h4>Комната</h4>
+            <p class="mini-value" *ngIf="activeRoomCode; else noRoomCode">{{ activeRoomCode }}</p>
+            <ng-template #noRoomCode>
+              <p class="mini-value">-</p>
+            </ng-template>
+          </article>
+          <article class="mini-card">
+            <h4>Квизов</h4>
+            <p class="mini-value">{{ quizzes.length }}</p>
+          </article>
+        </div>
+
+        <div class="subpanel organizer-session">
+          <h3>1. Ведение сессии</h3>
+          <p *ngIf="activeRoomCode; else noActiveSession">Активная комната: <strong>{{ activeRoomCode }}</strong></p>
+          <ng-template #noActiveSession>
+            <p>Сессия пока не запущена. Запустите один из квизов ниже.</p>
+          </ng-template>
+          <div class="actions" *ngIf="activeRoomCode">
+            <button (click)="nextQuestion()">Следующий вопрос</button>
+            <button class="danger" (click)="finishSession()">Завершить</button>
+          </div>
+        </div>
+
+        <details class="subpanel organizer-create" open>
+          <summary>2. Конструктор квиза</summary>
+
+          <div class="stack-fields">
+            <label>
+              Название
+              <input [(ngModel)]="createQuizModel.title" placeholder="Например: Кино 2000-х" />
+            </label>
+            <label>
+              Категория
+              <input [(ngModel)]="createQuizModel.category" placeholder="Кино, История, IT..." />
+            </label>
+            <label>
+              Время на вопрос (сек)
+              <input type="number" [(ngModel)]="createQuizModel.timePerQuestionSeconds" min="5" />
+            </label>
+          </div>
+
+          <div class="question-card" *ngFor="let q of createQuizModel.questions; let qi = index">
+            <h4>Вопрос {{ qi + 1 }}</h4>
+
+            <label>
+              Текст
+              <textarea [(ngModel)]="q.text"></textarea>
+            </label>
+            <label>
+              URL изображения
+              <input [(ngModel)]="q.imageUrl" placeholder="https://..." />
+            </label>
+
+            <div class="two-cols compact-grid">
+              <label>
+                Тип
+                <select [(ngModel)]="q.type" (ngModelChange)="onQuestionTypeChanged(q)">
+                  <option value="SINGLE_CHOICE">Одиночный выбор</option>
+                  <option value="MULTIPLE_CHOICE">Множественный выбор</option>
+                </select>
+              </label>
+              <label>
+                Баллы
+                <input type="number" [(ngModel)]="q.points" min="1" />
+              </label>
+            </div>
+
+            <div class="option-row" *ngFor="let op of q.options; let oi = index">
+              <label>
+                Вариант {{ oi + 1 }}
+                <input [(ngModel)]="op.text" />
+              </label>
+              <label class="inline-check">
+                <input [type]="q.type === 'SINGLE_CHOICE' ? 'radio' : 'checkbox'" [name]="'correct-' + qi"
+                  [checked]="op.correct" (change)="onOptionCorrectChanged(q, oi, $any($event.target).checked)" />
+                Верный
+              </label>
+            </div>
+
+            <button class="ghost" (click)="addOption(q)">Добавить вариант</button>
+          </div>
+
+          <div class="actions sticky-actions">
+            <button class="ghost" (click)="addQuestion()">Добавить вопрос</button>
+            <button (click)="createQuiz()">Сохранить квиз</button>
+          </div>
+        </details>
+
+        <div class="subpanel organizer-list">
+          <h3>3. Мои квизы</h3>
+          <div class="quiz-list" *ngIf="quizzes.length; else noQuizzes">
+            <div class="quiz-item" *ngFor="let quiz of quizzes">
+              <div class="quiz-head">
+                <strong>{{ quiz.title }}</strong>
+                <small>{{ quiz.category }} • {{ quiz.questionCount }} вопросов</small>
+              </div>
+              <button (click)="startSession(quiz.id)">Запустить</button>
+            </div>
+          </div>
+          <ng-template #noQuizzes>
+            <p>Квизов пока нет.</p>
+          </ng-template>
+        </div>
+      </section>
+
+      <div class="subpanel" *ngIf="profileRole === 'PARTICIPANT'">
+        <h3>Подключение к комнате</h3>
+        <label>
+          Код комнаты
+          <input [(ngModel)]="roomCode" />
+        </label>
+        <button (click)="joinRoom()">Подключиться</button>
+      </div>
+
+    </aside>
+
+    <section class="content-panel panel">
+      <div class="view-tabs">
+        <button [class.active]="currentView === 'live'" (click)="currentView = 'live'">Live-этап</button>
+        <button [class.active]="currentView === 'leaderboard'" (click)="currentView = 'leaderboard'">Лидерборд</button>
+        <button [class.active]="currentView === 'cabinet'" (click)="currentView = 'cabinet'">Личный кабинет</button>
+      </div>
+
+      <section *ngIf="currentView === 'live'" class="view-body">
+        <h2>Live-этап</h2>
+        <p *ngIf="activeRoomCode">Комната: {{ activeRoomCode }}</p>
+        <p *ngIf="sessionState?.status === 'FINISHED'">Квиз завершён. Итоги в лидерборде.</p>
+
+        <div class="subpanel" *ngIf="liveQuestion as q; else noQuestion">
+          <h3>Вопрос {{ q.index + 1 }} / {{ q.total }}</h3>
+          <p>{{ q.text }}</p>
+          <img *ngIf="q.imageUrl" [src]="q.imageUrl" alt="question image" />
+
+          <div class="option" *ngFor="let op of q.options">
+            <label>
+              <input [type]="q.type === 'SINGLE_CHOICE' ? 'radio' : 'checkbox'" [name]="'question-' + q.questionId"
+                [checked]="selectedOptionIds.includes(op.id)"
+                (change)="toggleOption(op.id, $any($event.target).checked)" />
+              {{ op.text }}
+            </label>
+          </div>
+          <button (click)="submitAnswer()">Отправить ответ</button>
+        </div>
+
+        <ng-template #noQuestion>
+          <p *ngIf="sessionState?.status !== 'FINISHED'">Ожидание текущего вопроса...</p>
+        </ng-template>
+      </section>
+
+      <section *ngIf="currentView === 'leaderboard'" class="view-body">
+        <h2>Лидерборд</h2>
+        <div class="subpanel" *ngIf="sessionState?.leaderboard?.length; else noBoard">
+          <ol>
+            <li *ngFor="let p of sessionState?.leaderboard">{{ p.displayName }} — {{ p.score }}</li>
+          </ol>
+        </div>
+        <ng-template #noBoard>
+          <p>Лидерборд пока пуст.</p>
+        </ng-template>
+      </section>
+
+      <section *ngIf="currentView === 'cabinet'" class="view-body">
+        <h2>Личный кабинет</h2>
+        <div *ngIf="profileRole === 'ORGANIZER' && organizerCabinet" class="subpanel">
+          <p>Создано квизов: {{ organizerCabinet.quizzesCreated }}</p>
+          <p>Проведено сессий: {{ organizerCabinet.sessionsHosted }}</p>
+        </div>
+        <div *ngIf="profileRole === 'PARTICIPANT' && participantCabinet" class="subpanel">
+          <p>Пройдено квизов: {{ participantCabinet.quizzesPlayed }}</p>
+          <p>Суммарные баллы: {{ participantCabinet.totalScore }}</p>
+        </div>
+      </section>
+    </section>
+  </main>
+</div>
